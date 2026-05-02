@@ -16,6 +16,7 @@ The current guide covers:
 - requiring signed images
 - allowlisting exact image digests in Kata policy
 - wiring that policy through initdata for Red Hat peer pods
+- following the OpenShift Sandboxed Containers 1.12 model
 
 ## Prerequisites
 
@@ -25,6 +26,7 @@ For the current guide, the minimum prerequisites are:
 
 - Intel TDX already works
 - Red Hat OpenShift Sandboxed Containers peer pods already work
+- the target environment uses the OpenShift Sandboxed Containers 1.12 workflow
 - Red Hat build of Trustee is installed
 - Trustee uses Intel Trust Authority for attestation
 - you can change Trustee configuration and workload manifests

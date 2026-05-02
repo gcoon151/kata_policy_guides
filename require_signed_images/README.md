@@ -5,6 +5,7 @@ Use this when:
 - you already have TDX working
 - Red Hat build of Trustee is installed
 - Trustee uses Intel Trust Authority for attestation
+- you are using OpenShift Sandboxed Containers 1.12
 - you want peer pods to run only approved container images
 
 ## What You Are Configuring
@@ -52,7 +53,11 @@ Create `security-policy-config.json`:
 
 ```json
 {
-  "default": [],
+  "default": [
+    {
+      "type": "reject"
+    }
+  ],
   "transports": {
     "docker": {
       "icr.io/acme/payments-api:stable": [
@@ -74,11 +79,23 @@ oc create secret generic security-policy \
   -n trustee-operator-system
 ```
 
-Make sure Trustee uses both secrets:
+In 1.12, use the generated `KbsConfig`.
+
+Edit it:
+
+```bash
+oc edit kbsconfig <kbsconfig-name> -n trustee-operator-system
+```
+
+Make sure `spec.kbsSecretResources` includes both secrets.
+Keep any existing entries:
 
 ```yaml
 spec:
-  kbsSecretResources: ["kbsres1", "security-policy", "img-sig"]
+  kbsSecretResources:
+    - kbsres1
+    - img-sig
+    - security-policy
 ```
 
 ## Step 3: Create the Kata Policy
@@ -126,7 +143,7 @@ Create `initdata.toml`:
 
 ```toml
 version = "0.1.0"
-algorithm = "sha384"
+algorithm = "sha256"
 
 [data]
 "aa.toml" = '''
@@ -187,6 +204,8 @@ What this file does:
 - `cdh.toml`: Trustee settings and image signature policy location
 - `policy.rego`: Kata runtime policy
 
+If Trustee uses `insecure_http = true`, remove the `kbs_cert` block from `cdh.toml`.
+
 ## Step 5: Encode `initdata.toml`
 
 Create the value you will put in the pod:
@@ -213,6 +232,7 @@ Add this new expected value to the reference values used by your attestation flo
 Simple rule:
 
 - if you change `initdata.toml`, update the expected measured value too
+- if you change `initdata.toml`, restart the `cloud-api-adaptor` DaemonSet
 
 ## Step 7: Apply the Initdata to the Workload
 
@@ -221,7 +241,9 @@ Add this annotation to the pod:
 ```yaml
 metadata:
   annotations:
-    io.katacontainers.config.runtime.cc_init_data: "<contents-of-initdata.txt>"
+    io.katacontainers.config.hypervisor.cc_init_data: "<contents-of-initdata.txt>"
+spec:
+  runtimeClassName: kata-remote
 ```
 
 ## Step 8: Test
@@ -274,6 +296,12 @@ Changing `initdata.toml` and not updating the expected measured value.
 
 That breaks attestation or resource release.
 
+### Mistake 5
+
+Changing `initdata.toml` and not restarting `cloud-api-adaptor`.
+
+That leaves peer pods using old configuration.
+
 ## Minimal Rule To Remember
 
 - Trustee signed-image policy checks signature
@@ -288,9 +316,9 @@ You need all three pointed at the right job.
   - https://confidentialcontainers.org/docs/features/initdata/
 - Confidential Containers: Policies
   - https://confidentialcontainers.org/docs/attestation/policies/
-- Red Hat OpenShift Sandboxed Containers 1.11: Deploying confidential containers
-  - https://docs.redhat.com/en/documentation/openshift_sandboxed_containers/1.11/html-single/deploying_confidential_containers/index
-- Red Hat OpenShift Sandboxed Containers 1.11: Deploying Red Hat build of Trustee
-  - https://docs.redhat.com/en/documentation/openshift_sandboxed_containers/1.11/html-single/deploying_red_hat_build_of_trustee/deploying_red_hat_build_of_trustee
+- Red Hat OpenShift Sandboxed Containers 1.12: Deploying confidential containers on Microsoft Azure Red Hat OpenShift
+  - https://docs.redhat.com/en/documentation/openshift_sandboxed_containers/1.12/html/deploying_confidential_containers_on_microsoft_azure_red_hat_openshift/index
+- Red Hat OpenShift Sandboxed Containers 1.12: Deploying Red Hat build of Trustee for workloads running on bare-metal servers
+  - https://docs.redhat.com/en/documentation/openshift_sandboxed_containers/1.12/html/deploying_red_hat_build_of_trustee_for_workloads_running_on_bare-metal_servers/index
 - Intel Trust Authority: Attestation policies
   - https://docs.trustauthority.intel.com/main/articles/articles/ita/concept-policies.html

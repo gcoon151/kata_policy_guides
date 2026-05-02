@@ -13,6 +13,7 @@ Configure Red Hat peer pods so:
 - TDX already works
 - Red Hat build of Trustee is installed
 - Trustee uses Intel Trust Authority for attestation
+- OpenShift Sandboxed Containers version is 1.12
 - peer pods are already functional
 
 ## Safety Rules
@@ -92,7 +93,11 @@ Create `security-policy-config.json`:
 
 ```json
 {
-  "default": [],
+  "default": [
+    {
+      "type": "reject"
+    }
+  ],
   "transports": {
     "docker": {
       "icr.io/acme/payments-api:stable": [
@@ -116,9 +121,18 @@ oc create secret generic security-policy \
 
 Ensure Trustee exposes both resources:
 
+```bash
+oc edit kbsconfig <kbsconfig-name> -n trustee-operator-system
+```
+
+Required result:
+
 ```yaml
 spec:
-  kbsSecretResources: ["kbsres1", "security-policy", "img-sig"]
+  kbsSecretResources:
+    - kbsres1
+    - img-sig
+    - security-policy
 ```
 
 ### 3. Create Kata runtime policy
@@ -167,7 +181,7 @@ Create `initdata.toml`:
 
 ```toml
 version = "0.1.0"
-algorithm = "sha384"
+algorithm = "sha256"
 
 [data]
 "aa.toml" = '''
@@ -222,6 +236,8 @@ CreateContainerRequest if {
 '''
 ```
 
+If Trustee uses `insecure_http = true`, remove the `kbs_cert` block.
+
 ### 5. Encode initdata
 
 ```bash
@@ -258,7 +274,9 @@ Add this pod annotation:
 ```yaml
 metadata:
   annotations:
-    io.katacontainers.config.runtime.cc_init_data: "<contents-of-initdata.txt>"
+    io.katacontainers.config.hypervisor.cc_init_data: "<contents-of-initdata.txt>"
+spec:
+  runtimeClassName: kata-remote
 ```
 
 If initdata changed, restart the `cloud-api-adaptor` DaemonSet before testing.
@@ -329,6 +347,7 @@ Configuration is complete only if all are true:
 - `img-sig` secret exists
 - `security-policy` secret exists
 - Trustee exposes both resources
+- generated `KbsConfig` contains `img-sig` and `security-policy` in `spec.kbsSecretResources`
 - `policy.rego` allows only approved digests
 - `initdata.toml` contains `aa.toml`, `cdh.toml`, and `policy.rego`
 - `initdata.txt` is applied to the workload
